@@ -86,4 +86,25 @@ describe('page-loader', () => {
       expect(path.basename(filePath)).toBe(expectedFile);
     }
   });
+
+  test('should download images and replace src', async () => {
+    const htmlFixture = '<!DOCTYPE html>...';
+    const imageBuffer = Buffer.from('fake image data');
+
+    nock('https://ru.hexlet.io')
+      .get('/courses')
+      .reply(200, htmlFixture, { 'Content-Type': 'text/html' });
+    nock('https://ru.hexlet.io')
+      .get('/assets/professions/nodejs.png')
+      .reply(200, imageBuffer, { 'Content-Type': 'image/png' });
+
+    const filePath = await downloadPage('https://ru.hexlet.io/courses', tempDir);
+    const filesDir = path.join(tempDir, 'ru-hexlet-io-courses_files');
+    const imgPath = path.join(filesDir, 'ru-hexlet-io-assets-professions-nodejs.png');
+
+    await expect(fs.access(imgPath)).resolves.toBeUndefined();
+
+    const updatedHtml = await fs.readFile(filePath, 'utf-8');
+    expect(updatedHtml).toContain('src="ru-hexlet-io-courses_files/ru-hexlet-io-assets-professions-nodejs.png"');
+  });
 });
