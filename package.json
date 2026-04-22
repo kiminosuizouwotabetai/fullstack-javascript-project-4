@@ -1,0 +1,30 @@
+{
+  "name": "@hexlet/code",
+  "version": "1.0.0",
+  "description": "[![Actions Status](https://github.com/kiminosuizouwotabetai/fullstack-javascript-project-4/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/kiminosuizouwotabetai/fullstack-javascript-project-4/actions)",
+  "main": "./src/index.js",
+  "bin": {
+    "fullstack-javascript-project-4": "bin/page-loader.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kiminosuizouwotabetai/fullstack-javascript-project-4.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kiminosuizouwotabetai/fullstack-javascript-project-4/issues"
+  },
+  "homepage": "https://github.com/kiminosuizouwotabetai/fullstack-javascript-project-4#readme",
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.32.0"
+  }
+}
