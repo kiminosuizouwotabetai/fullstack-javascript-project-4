@@ -108,3 +108,68 @@ describe('page-loader', () => {
     expect(updatedHtml).toContain('src="ru-hexlet-io-courses_files/ru-hexlet-io-assets-professions-nodejs.png"');
   });
 });
+
+test('should download css, js and replace links', async () => {
+  const htmlFixture = `<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="/assets/application.css">
+    <script src="/packs/js/runtime.js"></script>
+    <link href="/courses" rel="canonical">
+  </head>
+  <body></body>
+</html>`;
+  const cssBuffer = Buffer.from('body { color: red; }');
+  const jsBuffer = Buffer.from('console.log("runtime");');
+  const pageBuffer = Buffer.from('<html>sub page</html>');
+
+  nock('https://ru.hexlet.io')
+    .get('/courses')
+    .reply(200, pageBuffer, { 'Content-Type': 'text/html' });
+  nock('https://ru.hexlet.io')
+    .get('/assets/application.css')
+    .reply(200, cssBuffer, { 'Content-Type': 'text/css' });
+  nock('https://ru.hexlet.io')
+    .get('/packs/js/runtime.js')
+    .reply(200, jsBuffer, { 'Content-Type': 'application/javascript' });
+
+  nock('https://ru.hexlet.io')
+    .get('/courses')
+    .reply(200, htmlFixture, { 'Content-Type': 'text/html' });
+
+  const filePath = await downloadPage('https://ru.hexlet.io/courses', tempDir);
+  const filesDir = path.join(tempDir, 'ru-hexlet-io-courses_files');
+
+  await expect(fs.access(path.join(filesDir, 'ru-hexlet-io-assets-application.css'))).resolves.toBeUndefined();
+  await expect(fs.access(path.join(filesDir, 'ru-hexlet-io-packs-js-runtime.js'))).resolves.toBeUndefined();
+  await expect(fs.access(path.join(filesDir, 'ru-hexlet-io-courses.html'))).resolves.toBeUndefined();
+
+  const modifiedHtml = await fs.readFile(filePath, 'utf-8');
+  expect(modifiedHtml).toContain('href="ru-hexlet-io-courses_files/ru-hexlet-io-assets-application.css"');
+  expect(modifiedHtml).toContain('src="ru-hexlet-io-courses_files/ru-hexlet-io-packs-js-runtime.js"');
+  expect(modifiedHtml).toContain('href="ru-hexlet-io-courses_files/ru-hexlet-io-courses.html"');
+});
+
+test('should ignore external resources', async () => {
+  const htmlFixture = `<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="https://cdn2.hexlet.io/assets/menu.css">
+    <script src="https://js.stripe.com/v3/"></script>
+  </head>
+  <body></body>
+</html>`;
+
+  nock('https://ru.hexlet.io')
+    .get('/courses')
+    .reply(200, htmlFixture, { 'Content-Type': 'text/html' });
+
+  const filePath = await downloadPage('https://ru.hexlet.io/courses', tempDir);
+  const modifiedHtml = await fs.readFile(filePath, 'utf-8');
+
+  expect(modifiedHtml).toContain('href="https://cdn2.hexlet.io/assets/menu.css"');
+  expect(modifiedHtml).toContain('src="https://js.stripe.com/v3/"');
+
+  const filesDir = path.join(tempDir, 'ru-hexlet-io-courses_files');
+  await expect(fs.access(filesDir)).rejects.toThrow();
+});

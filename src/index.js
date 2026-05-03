@@ -2,7 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { getFileName, getResourceFileName, getFilesDirName } = require('./utils');
+const { getFileName, getFilesDirName, getAssetFileName } = require('./utils');
 
 const downloadPage = (url, outputDir = process.cwd()) => {
   const htmlFileName = getFileName(url);
@@ -14,33 +14,66 @@ const downloadPage = (url, outputDir = process.cwd()) => {
     .then((response) => {
       const htmlContent = response.data.toString('utf-8');
       const $ = cheerio.load(htmlContent);
-      const imgTags = $('img');
-      const imgPromises = [];
+      const baseHost = new URL(url).host;
 
-      imgTags.each((i, img) => {
-        const src = $(img).attr('src');
-        if (src) {
-          const absoluteUrl = new URL(src, url).href;
-          const imgFileName = getResourceFileName(absoluteUrl);
-          const localImgPath = path.join(filesDirPath, imgFileName);
-          const relativeImgPath = path.join(filesDirName, imgFileName);
+      const assetPromises = new Map(); // url -> promise
+      const replacements = []; // { element, attr, localPath }
 
-          $(img).attr('src', relativeImgPath);
+      const processAttribute = (element, attrName, baseUrl, baseHost, filesDirName) => {
+        const attrValue = $(element).attr(attrName);
+        if (!attrValue) return;
 
-          imgPromises.push(
-            axios.get(absoluteUrl, { responseType: 'arraybuffer' })
-              .then((imgResponse) => fs.writeFile(localImgPath, imgResponse.data)),
-          );
+        try {
+          const absoluteUrl = new URL(attrValue, baseUrl).href;
+          const { host } = new URL(absoluteUrl);
+          if (host !== baseHost) return; // внешний ресурс – игнорируем
+
+          const fileName = getAssetFileName(absoluteUrl);
+          const localPath = path.join(filesDirName, fileName);
+          const absoluteLocalPath = path.join(filesDirPath, fileName);
+
+          replacements.push({
+            element,
+            attr: attrName,
+            newValue: localPath,
+          });
+
+          if (!assetPromises.has(absoluteUrl)) {
+            const downloadPromise = axios.get(absoluteUrl, { responseType: 'arraybuffer' })
+              .then((res) => fs.writeFile(absoluteLocalPath, res.data))
+              .catch((err) => {
+                // Логируем ошибку, но не прерываем загрузку остальных
+                console.error(`Failed to download ${absoluteUrl}: ${err.message}`);
+              });
+            assetPromises.set(absoluteUrl, downloadPromise);
+          }
+        } catch (err) {
+          console.error(`Invalid URL: ${attrValue} on ${baseUrl}`);
         }
+      };
+
+      $('img[src]').each((i, el) => {
+        processAttribute(el, 'src', url, baseHost, filesDirName);
       });
 
-      // Создаём директорию для ресурсов, если есть изображения
-      const createDirPromise = imgPromises.length > 0
+      $('link[href]').each((i, el) => {
+        processAttribute(el, 'href', url, baseHost, filesDirName);
+      });
+
+      $('script[src]').each((i, el) => {
+        processAttribute(el, 'src', url, baseHost, filesDirName);
+      });
+
+      replacements.forEach(({ element, attr, newValue }) => {
+        $(element).attr(attr, newValue);
+      });
+
+      const createDirPromise = assetPromises.size > 0
         ? fs.mkdir(filesDirPath, { recursive: true })
         : Promise.resolve();
 
       return createDirPromise
-        .then(() => Promise.all(imgPromises))
+        .then(() => Promise.all(Array.from(assetPromises.values())))
         .then(() => {
           const modifiedHtml = $.html();
           return fs.writeFile(htmlFilePath, modifiedHtml);
